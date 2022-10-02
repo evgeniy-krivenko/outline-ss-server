@@ -62,6 +62,9 @@ type CipherList interface {
 	// which is a List of *CipherEntry.  Update takes ownership of `contents`,
 	// which must not be read or written after this call.
 	Update(contents *list.List)
+	GetList() *list.List
+	AddCipher(e *CipherEntry)
+	RemoveCipher(ID string)
 }
 
 type cipherList struct {
@@ -115,4 +118,27 @@ func (cl *cipherList) Update(src *list.List) {
 	cl.mu.Lock()
 	cl.list = src
 	cl.mu.Unlock()
+}
+
+func (cl *cipherList) GetList() *list.List {
+	cl.mu.RLock()
+	defer cl.mu.RUnlock()
+	return cl.list
+}
+
+func (cl *cipherList) AddCipher(e *CipherEntry) {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	cl.list.PushBack(e)
+}
+
+func (cl *cipherList) RemoveCipher(ID string) {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	for e := cl.list.Front(); e != nil; e = e.Next() {
+		c := e.Value.(*CipherEntry)
+		if c.ID == ID {
+			cl.list.Remove(e)
+		}
+	}
 }

@@ -1,4 +1,4 @@
-module github.com/Jigsaw-Code/outline-ss-server
+module github.com/evgeniy-krivenko/outline-ss-server
 
 require (
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/common v0.10.0 // indirect
 	github.com/prometheus/procfs v0.1.3 // indirect
 	github.com/riobard/go-bloom v0.0.0-20200614022211-cdc8013cb5b3 // indirect
-	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8 // indirect
+	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8 // indirect
 	google.golang.org/protobuf v1.23.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )

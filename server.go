@@ -28,9 +28,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-ss-server/service"
-	"github.com/Jigsaw-Code/outline-ss-server/service/metrics"
-	ss "github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	"github.com/evgeniy-krivenko/outline-ss-server/service"
+	"github.com/evgeniy-krivenko/outline-ss-server/service/metrics"
+	ss "github.com/evgeniy-krivenko/outline-ss-server/shadowsocks"
 	"github.com/op/go-logging"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/prometheus/client_golang/prometheus"
@@ -45,10 +45,10 @@ var logger *logging.Logger
 var version = "dev"
 
 // 59 seconds is most common timeout for servers that do not respond to invalid requests
-const tcpReadTimeout time.Duration = 59 * time.Second
+const tcpReadTimeout = 59 * time.Second
 
 // A UDP NAT timeout of at least 5 minutes is recommended in RFC 4787 Section 4.3.
-const defaultNatTimeout time.Duration = 5 * time.Minute
+const defaultNatTimeout = 5 * time.Minute
 
 func init() {
 	var prefix = "%{level:.1s}%{time:2006-01-02T15:04:05.000Z07:00} %{pid} %{shortfile}]"
@@ -112,6 +112,7 @@ func (s *SSServer) removePort(portNum int) error {
 	return nil
 }
 
+// заменить загрузку конфига из файла на добавление из gRPC
 func (s *SSServer) loadConfig(filename string) error {
 	config, err := readConfig(filename)
 	if err != nil {
@@ -135,9 +136,14 @@ func (s *SSServer) loadConfig(filename string) error {
 		cipherList.PushBack(&entry)
 	}
 	for port := range s.ports {
+		// при инициализации в сервере нет портов, поэтому не срабатывает.
+		// пока не совсем понятно зачем это делается
 		portChanges[port] = portChanges[port] - 1
 	}
 	for portNum, count := range portChanges {
+		// тут тоже непонятная логика, надо подумать и разобраться
+		//
+		fmt.Println("portNum: ", portNum)
 		if count == -1 {
 			if err := s.removePort(portNum); err != nil {
 				return fmt.Errorf("Failed to remove port %v: %v", portNum, err)
@@ -150,9 +156,59 @@ func (s *SSServer) loadConfig(filename string) error {
 	}
 	for portNum, cipherList := range portCiphers {
 		s.ports[portNum].cipherList.Update(cipherList)
+		fmt.Println("portNum: ", portNum)
 	}
 	logger.Infof("Loaded %v access keys", len(config.Keys))
 	s.m.SetNumAccessKeys(len(config.Keys), len(portCiphers))
+	return nil
+}
+
+type cipherStruct struct {
+	ID     string
+	Port   int
+	Cipher string
+	Secret string
+}
+
+func (s *SSServer) AddCipher(cs cipherStruct) (int, error) {
+	var isPortInit bool
+	for port := range s.ports {
+		if port == cs.Port {
+			isPortInit = true
+		}
+	}
+
+	if !isPortInit {
+		var port = cs.Port
+		for err := s.startPort(port); err != nil; {
+			logger.Errorf("error for starting port: %d", port)
+			port++
+		}
+		cs.Port = port
+	}
+
+	cipher, err := ss.NewCipher(cs.Cipher, cs.Secret)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create cipher for key %v: %v", cs.ID, err)
+	}
+	entry := service.MakeCipherEntry(cs.ID, cipher, cs.Secret)
+	s.ports[cs.Port].cipherList.AddCipher(&entry)
+	return cs.Port, nil
+}
+
+func (s *SSServer) RemoveCipher(cs cipherStruct) error {
+	ssP, ok := s.ports[cs.Port]
+	if !ok {
+		return fmt.Errorf("port for remove does not exists in server: %d", cs.Port)
+	}
+	ssP.cipherList.RemoveCipher(cs.ID)
+	l := ssP.cipherList.GetList()
+	if l.Len() <= 0 {
+		err := s.removePort(cs.Port)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -180,6 +236,7 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 	}
 	sigHup := make(chan os.Signal, 1)
 	signal.Notify(sigHup, syscall.SIGHUP)
+	// заменить горутину на gRPC сервер, который будет обрабатывать добавление и удаление клиентов
 	go func() {
 		for range sigHup {
 			logger.Info("Updating config")
@@ -188,6 +245,19 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 			}
 		}
 	}()
+	_, _ = server.AddCipher(cipherStruct{
+		Cipher: "chacha20-ietf-poly1305",
+		Port:   9005,
+		ID:     "13451",
+		Secret: "adfasdfa",
+	})
+
+	//_ = server.RemoveCipher(cipherStruct{
+	//	Cipher: "chacha20-ietf-poly1305",
+	//	Port:   9005,
+	//	ID:     "13451",
+	//	Secret: "adfasdfa",
+	//})
 	return server, nil
 }
 
