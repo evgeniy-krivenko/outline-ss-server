@@ -19,7 +19,7 @@ import (
 	"net"
 	"sync"
 
-	ss "github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	ss "github.com/evgeniy-krivenko/outline-ss-server/shadowsocks"
 )
 
 // Don't add a tag if it would reduce the salt entropy below this amount.
@@ -65,6 +65,7 @@ type CipherList interface {
 	GetList() *list.List
 	AddCipher(e *CipherEntry)
 	RemoveCipher(ID string)
+	IsCipherExists(ID string) bool
 }
 
 type cipherList struct {
@@ -141,4 +142,17 @@ func (cl *cipherList) RemoveCipher(ID string) {
 			cl.list.Remove(e)
 		}
 	}
+}
+
+func (cl *cipherList) IsCipherExists(ID string) (isCipherExists bool) {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	for e := cl.list.Front(); e != nil; e = e.Next() {
+		c := e.Value.(*CipherEntry)
+		if c.ID == ID {
+			isCipherExists = true
+			break
+		}
+	}
+	return isCipherExists
 }

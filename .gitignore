@@ -16,3 +16,4 @@
 # goreleaser temporary files.
 /dist/
 .idea
+.bin
