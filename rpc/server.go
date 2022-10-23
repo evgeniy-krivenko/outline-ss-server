@@ -6,7 +6,6 @@ import (
 	"github.com/evgeniy-krivenko/outline-ss-server/server"
 	"github.com/evgeniy-krivenko/vpn-api/gen/ss_service"
 	"net"
-	"time"
 )
 
 var cipherType = "chacha20-ietf-poly1305"
@@ -52,23 +51,16 @@ func (h *Handler) SsConnectionStatus(ctx context.Context, req *ss_service.SsConn
 }
 func (h *Handler) CheckSsPortAvailable(ctx context.Context, req *ss_service.CheckSsPortAvailableReq) (*ss_service.CheckSsPortAvailableRes, error) {
 	var resp ss_service.CheckSsPortAvailableRes
-	timeout := time.Second
-	conn, err := net.DialTimeout(
+	conn, err := net.Listen(
 		"tcp",
 		fmt.Sprintf(":%d", req.Port),
-		timeout,
 	)
 
 	if err != nil {
-		fmt.Println("Connecting error:", err)
 		return &resp, nil
 	}
+	defer conn.Close()
 
-	if conn != nil {
-		defer conn.Close()
-		resp.Status = true
-		return &resp, nil
-	}
-	
-	return nil, fmt.Errorf("error while check ss port: conn is equal nil")
+	resp.Status = true
+	return &resp, nil
 }
