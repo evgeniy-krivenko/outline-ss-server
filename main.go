@@ -115,7 +115,7 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 		hth := health.NewServer()
 		healphpb.RegisterHealthServer(s, hth)
 
-		c, err := consul.NewClient("localhost:8500")
+		c, err := consul.NewClient("89.208.107.104:8500")
 		if err != nil {
 			logger.Fatal(err)
 		}
