@@ -17,10 +17,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/evgeniy-krivenko/outline-ss-server/pkg/consul"
 	rpchandler "github.com/evgeniy-krivenko/outline-ss-server/rpc"
 	"github.com/evgeniy-krivenko/outline-ss-server/server"
 	"github.com/evgeniy-krivenko/vpn-api/gen/ss_service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healphpb "google.golang.org/grpc/health/grpc_health_v1"
 	"log"
 	"net"
 	"net/http"
@@ -57,6 +60,15 @@ func init() {
 	logger = logging.MustGetLogger("")
 }
 
+func getHost() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
+	return host
+}
+
 // RunSSServer starts a shadowsocks server running, and returns the server or an error.
 func RunSSServer(filename string, natTimeout time.Duration, sm metrics.ShadowsocksMetrics, replayHistory int) (*server.SSServer, error) {
 	cnf := &server.SSConfig{
@@ -83,7 +95,7 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 	}()
 
 	go func() {
-		lis, err := net.Listen("tcp", ":50051")
+		lis, err := net.Listen("tcp", ":50052")
 		if err != nil {
 			panic(err)
 		}
@@ -96,12 +108,33 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 
 		// inject SSServer to handler
 		rpcSrv := rpchandler.NewGrpcHandler(srv)
+
 		s := grpc.NewServer()
 		ss_service.RegisterSsServiceServer(s, rpcSrv)
+
+		hth := health.NewServer()
+		healphpb.RegisterHealthServer(s, hth)
+
+		c, err := consul.NewClient("localhost:8500")
+		if err != nil {
+			logger.Fatal(err)
+		}
+		err = c.GrpcRegistration(&consul.GrpcRegConf{
+			Id:       "NL-1",
+			Name:     "NL-1-ss",
+			Addr:     getHost(),
+			Port:     50052,
+			Tags:     []string{"ss"},
+			Interval: 15,
+			TLS:      false,
+		})
+		if err != nil {
+			logger.Fatal(err)
+		}
+		logger.Infof("starting grpc server on port %s", "50051")
 		if err := s.Serve(lis); err != nil {
 			panic(err)
 		}
-		logger.Infof("starting grpc server on port %s", "50051")
 	}()
 
 	return srv, nil
