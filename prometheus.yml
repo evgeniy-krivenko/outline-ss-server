@@ -24,4 +24,4 @@ scrape_configs:
 
   - job_name: "ss-server"
     static_configs:
-      - targets: ["app:9091"]
+      - targets: ["app:9092"]

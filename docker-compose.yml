@@ -17,6 +17,9 @@ services:
     volumes:
       - ./prometheus/:/etc/prometheus/
       - ./prometheus_data:/prometheus
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
 
@@ -32,5 +35,7 @@ networks:
     driver: bridge
 
 configs:
+  prometheus_config:
+    file: ./prometheus.yml
   app_config:
     file: ./config.yml
