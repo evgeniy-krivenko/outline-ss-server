@@ -138,7 +138,7 @@ func main() {
 		return
 	}
 
-	if flags.ConfigFile == "" || flags.ServiceId == "" {
+	if flags.ConfigFile == "" {
 		flag.Usage()
 		return
 	}

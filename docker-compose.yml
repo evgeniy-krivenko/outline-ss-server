@@ -14,9 +14,6 @@ services:
     image: prom/prometheus:latest
     networks:
       - open-connect
-    volumes:
-      - ./prometheus/:/etc/prometheus/
-      - ./prometheus_data:/prometheus
     configs:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml

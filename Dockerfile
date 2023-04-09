@@ -13,4 +13,6 @@ RUN mkdir /app
 WORKDIR /app
 
 COPY --from=builder /app/app .
-CMD [ "./app", "-config", "config.yml", "-metrics", "localhost:9092", "--replay_history=10000"]
+COPY --from=builder /app/config.yml .
+ENTRYPOINT ["./app"]
+CMD [ "-config", "config.yml", "-metrics", "localhost:9092", "--replay_history=10000"]
