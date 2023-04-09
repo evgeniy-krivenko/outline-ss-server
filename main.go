@@ -94,49 +94,6 @@ func RunSSServer(filename string, natTimeout time.Duration, sm metrics.Shadowsoc
 		}
 	}()
 
-	go func() {
-		lis, err := net.Listen("tcp", ":50052")
-		if err != nil {
-			panic(err)
-		}
-		defer func(lis net.Listener) {
-			err := lis.Close()
-			if err != nil {
-				logger.Errorf("error close tcp conn")
-			}
-		}(lis)
-
-		// inject SSServer to handler
-		rpcSrv := rpchandler.NewGrpcHandler(srv)
-
-		s := grpc.NewServer()
-		ss_service.RegisterSsServiceServer(s, rpcSrv)
-
-		hth := health.NewServer()
-		healphpb.RegisterHealthServer(s, hth)
-
-		c, err := consul.NewClient("89.208.107.104:8500")
-		if err != nil {
-			logger.Fatal(err)
-		}
-		err = c.GrpcRegistration(&consul.GrpcRegConf{
-			Id:       "NL-1",
-			Name:     "NL-1-ss",
-			Addr:     getHost(),
-			Port:     50052,
-			Tags:     []string{"ss"},
-			Interval: 15,
-			TLS:      false,
-		})
-		if err != nil {
-			logger.Fatal(err)
-		}
-		logger.Infof("starting grpc server on port %s", "50051")
-		if err := s.Serve(lis); err != nil {
-			panic(err)
-		}
-	}()
-
 	return srv, nil
 }
 
@@ -149,6 +106,11 @@ func main() {
 		replayHistory int
 		Verbose       bool
 		Version       bool
+		IsGRPC        bool
+		IsConsul      bool
+		GrpcPort      int
+		GrpcAddress   string
+		ServiceId     string
 	}
 	flag.StringVar(&flags.ConfigFile, "config", "", "Configuration filename")
 	flag.StringVar(&flags.MetricsAddr, "metrics", "", "Address for the Prometheus metrics")
@@ -157,6 +119,11 @@ func main() {
 	flag.IntVar(&flags.replayHistory, "replay_history", 0, "Replay buffer size (# of handshakes)")
 	flag.BoolVar(&flags.Verbose, "verbose", false, "Enables verbose logging output")
 	flag.BoolVar(&flags.Version, "version", false, "The version of the server")
+	flag.BoolVar(&flags.IsGRPC, "grpc", false, "Should to start gRPC server")
+	flag.BoolVar(&flags.IsConsul, "consul", false, "Should to start service discovery")
+	flag.IntVar(&flags.GrpcPort, "grpc-port", 50051, "Port for gRPC service")
+	flag.StringVar(&flags.GrpcAddress, "grpc-address", getHost(), "Address for gRPC service")
+	flag.StringVar(&flags.ServiceId, "service-id", "", "Service id discovery")
 
 	flag.Parse()
 
@@ -171,7 +138,7 @@ func main() {
 		return
 	}
 
-	if flags.ConfigFile == "" {
+	if flags.ConfigFile == "" || flags.ServiceId == "" {
 		flag.Usage()
 		return
 	}
@@ -196,9 +163,57 @@ func main() {
 	}
 	m := metrics.NewPrometheusShadowsocksMetrics(ipCountryDB, prometheus.DefaultRegisterer)
 	m.SetBuildInfo(version)
-	_, err = RunSSServer(flags.ConfigFile, flags.natTimeout, m, flags.replayHistory)
+	srv, err := RunSSServer(flags.ConfigFile, flags.natTimeout, m, flags.replayHistory)
 	if err != nil {
 		logger.Fatal(err)
+	}
+
+	if flags.IsGRPC {
+		go func() {
+			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", flags.GrpcPort))
+			if err != nil {
+				panic(err)
+			}
+			defer func(lis net.Listener) {
+				err := lis.Close()
+				if err != nil {
+					logger.Errorf("error close tcp conn")
+				}
+			}(lis)
+
+			// inject SSServer to handler
+			rpcSrv := rpchandler.NewGrpcHandler(srv)
+
+			s := grpc.NewServer()
+			ss_service.RegisterSsServiceServer(s, rpcSrv)
+
+			hth := health.NewServer()
+			healphpb.RegisterHealthServer(s, hth)
+
+			logger.Infof("starting grpc server on port %d", flags.GrpcPort)
+			if err := s.Serve(lis); err != nil {
+				panic(err)
+			}
+		}()
+	}
+
+	if flags.IsConsul {
+		c, err := consul.NewClient(fmt.Sprintf("%s:%d", "localhost", 8500))
+		if err != nil {
+			logger.Fatal(err)
+		}
+		err = c.GrpcRegistration(&consul.GrpcRegConf{
+			Id:       flags.ServiceId,
+			Name:     fmt.Sprintf("%s-ss", flags.ServiceId),
+			Addr:     flags.GrpcAddress,
+			Port:     flags.GrpcPort,
+			Tags:     []string{"ss"},
+			Interval: 30,
+			TLS:      false,
+		})
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 
 	sigCh := make(chan os.Signal, 1)

@@ -13,15 +13,15 @@
 # limitations under the License.
 
 global:
-  scrape_interval:     5s
+  scrape_interval: 5s
   external_labels:
-    monitor: 'outline-monitor'
+    monitor: "outline-monitor"
 
 scrape_configs:
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
-  - job_name:       'ss-server'
+  - job_name: "ss-server"
     static_configs:
-      - targets: ['localhost:9091']
+      - targets: ["app:9091"]

@@ -36,6 +36,7 @@ func (c *Client) GrpcRegistration(conf *GrpcRegConf) error {
 	registration := &api.AgentServiceRegistration{
 		ID:   conf.Id,
 		Name: conf.Name,
+		Address: conf.Addr,
 		Port: conf.Port,
 		Tags: conf.Tags,
 		Check: &api.AgentServiceCheck{
